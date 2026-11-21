@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<link rel="icon" href="data:,">
+<title>Difference Detective — Spot the Difference</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #141821; color: #f4f6fb;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  body { display: flex; flex-direction: column; }
+  #hud { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 12px;
+    background: #1d2330; border-bottom: 1px solid #2e3748; z-index: 5; }
+  #hud.hidden { display: none; }
+  #hud .brand { font-weight: 800; font-size: 17px; color: #ffb020; white-space: nowrap; }
+  #hud .chip { background: #2e3748; border-radius: 999px; padding: 5px 11px; font-size: 14px;
+    font-weight: 600; white-space: nowrap; }
+  #hud-time { font-variant-numeric: tabular-nums; }
+  #timebar { flex: 1 1 90px; min-width: 80px; height: 10px; background: #0c0e14; border-radius: 999px; overflow: hidden; }
+  #timebar-fill { height: 100%; width: 100%; background: #37d67a; border-radius: 999px; transition: width .2s linear; }
+  #timebar-fill.low { background: #ff5a5a; }
+  .hbtn { background: #2b6cb0; color: #fff; border: 0; border-radius: 10px; padding: 8px 12px;
+    font-size: 14px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+  .hbtn:active { transform: scale(.96); }
+  .hbtn.off { background: #3a4356; color: #9aa3b5; }
+  #main { position: relative; flex: 1; min-height: 0; }
+  #game { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+  #status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  #hint-toast { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%);
+    background: #4fc3f7; color: #06283a; font-weight: 700; font-size: 15px; padding: 9px 16px;
+    border-radius: 999px; z-index: 6; box-shadow: 0 4px 18px rgba(0,0,0,.45); max-width: 92vw; text-align: center; }
+  #hint-toast.hidden { display: none; }
+  .overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    background: rgba(10, 12, 18, 0.72); z-index: 10; padding: 16px; overflow-y: auto; }
+  .overlay.hidden { display: none; }
+  .card { background: #1d2330; border: 1px solid #2e3748; border-radius: 18px; padding: 26px 28px;
+    max-width: 620px; width: 100%; text-align: center; box-shadow: 0 12px 40px rgba(0,0,0,.5); }
+  .card h1 { margin: 0 0 6px; font-size: 34px; letter-spacing: .5px; }
+  .card h1 .accent { color: #ffb020; }
+  .card h2 { margin: 0 0 10px; font-size: 26px; }
+  .card p { margin: 8px 0; color: #c6cddb; font-size: 15px; line-height: 1.5; }
+  .card .big { font-size: 40px; letter-spacing: 4px; color: #ffd93b; margin: 6px 0; }
+  .card .score-line { font-size: 18px; font-weight: 700; color: #f4f6fb; }
+  .diff-row { display: flex; gap: 10px; justify-content: center; margin: 16px 0 6px; flex-wrap: wrap; }
+  .diff-btn { background: #2e3748; color: #f4f6fb; border: 2px solid transparent; border-radius: 12px;
+    padding: 10px 14px; font-size: 14px; cursor: pointer; min-width: 130px; }
+  .diff-btn b { display: block; font-size: 16px; }
+  .diff-btn small { color: #9aa3b5; }
+  .diff-btn.selected { border-color: #ffb020; background: #3a2f10; }
+  .btn { display: inline-block; background: #ffb020; color: #2a1c00; border: 0; border-radius: 12px;
+    padding: 13px 26px; font-size: 17px; font-weight: 800; cursor: pointer; margin: 8px 4px 0; }
+  .btn:active { transform: scale(.97); }
+  .btn.secondary { background: #2e3748; color: #f4f6fb; }
+  .howto { text-align: left; margin: 14px auto 4px; max-width: 460px; font-size: 14px; color: #c6cddb; line-height: 1.65; }
+  .howto b { color: #f4f6fb; }
+  #levels-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin: 16px 0; }
+  .level-card { background: #2e3748; color: #f4f6fb; border: 2px solid transparent; border-radius: 14px;
+    padding: 14px 10px; cursor: pointer; text-align: center; position: relative; }
+  .level-card:hover:not(:disabled) { border-color: #ffb020; }
+  .level-card:disabled { opacity: .45; cursor: not-allowed; }
+  .level-num { display: block; font-size: 22px; font-weight: 800; color: #ffb020; }
+  .level-name { display: block; font-size: 15px; font-weight: 700; margin-top: 2px; }
+  .level-tag { display: block; font-size: 12px; color: #9aa3b5; margin-top: 2px; min-height: 30px; }
+  .level-stars { display: block; color: #ffd93b; font-size: 16px; letter-spacing: 2px; margin-top: 4px; }
+  .level-lock { position: absolute; top: 8px; right: 10px; font-size: 15px; }
+  .kbd-hint { font-size: 12px; color: #9aa3b5; margin-top: 12px; }
+  @media (max-width: 640px) {
+    .card h1 { font-size: 27px; }
+    .card { padding: 20px 16px; }
+    #hud .brand { font-size: 15px; }
+    .hbtn { padding: 7px 9px; font-size: 13px; }
+  }
+</style>
+</head>
+<body>
+<header id="hud" class="hidden">
+  <span class="brand">🔍 Difference Detective</span>
+  <span class="chip" id="hud-level">1. Sunny Park</span>
+  <span class="chip" id="hud-found">0/6 found</span>
+  <span class="chip" id="hud-score">Score 0</span>
+  <span class="chip" id="hud-time">1:30</span>
+  <span id="timebar"><span id="timebar-fill"></span></span>
+  <span class="chip" id="hud-hints">💡 3</span>
+  <button class="hbtn" id="btn-hint" type="button">💡 Hint</button>
+  <button class="hbtn" id="btn-lens" type="button">🔍 Lens on</button>
+  <button class="hbtn" id="btn-sound" type="button">🔊 Sound</button>
+  <button class="hbtn" id="btn-pause" type="button">⏸ Pause</button>
+</header>
+<div id="main">
+  <canvas id="game" aria-label="Spot the difference: two pictures side by side, tap the differences"></canvas>
+  <p id="status" role="status" aria-live="polite"></p>
+  <div id="hint-toast" class="hidden"></div>
+
+  <div class="overlay" id="ov-title">
+    <div class="card">
+      <h1>🔍 Difference <span class="accent">Detective</span></h1>
+      <p>Two pictures. Six tiny differences. One sharp eye.</p>
+      <p id="best-line">No scores yet — be the first detective!</p>
+      <div class="diff-row" role="group" aria-label="Difficulty">
+        <button class="diff-btn" type="button" data-diff="relaxed"><b>Relaxed</b><small>120s per scene</small></button>
+        <button class="diff-btn selected" type="button" data-diff="classic"><b>Classic</b><small>90s per scene</small></button>
+        <button class="diff-btn" type="button" data-diff="rush"><b>Rush</b><small>60s per scene</small></button>
+      </div>
+      <button class="btn" id="btn-start" type="button">▶ Start playing</button>
+      <div class="howto">
+        <b>How to play:</b> Tap or click a difference on either picture — a green ring marks it.
+        Wrong taps cost 25 points and 3 seconds. Stuck? Spend a 💡 hint. The 🔍 lens magnifies
+        the spot under your pointer. Finish all 6 scenes to become the top detective!
+        <br><b>Keyboard:</b> arrows move the crosshair, Enter marks, H hint, L lens, P pause.
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay hidden" id="ov-levels">
+    <div class="card">
+      <h2>Choose a scene</h2>
+      <p>Find all 6 differences in each scene. Finish a scene to unlock the next one.</p>
+      <div id="levels-grid"></div>
+      <button class="btn secondary" id="btn-levels-back" type="button">← Back to title</button>
+    </div>
+  </div>
+
+  <div class="overlay hidden" id="ov-pause">
+    <div class="card">
+      <h2>Paused</h2>
+      <p>Take a breath, detective. The timer is waiting.</p>
+      <button class="btn" id="btn-resume" type="button">▶ Resume</button>
+      <button class="btn secondary" id="btn-pause-quit" type="button">Level select</button>
+    </div>
+  </div>
+
+  <div class="overlay hidden" id="ov-leveldone">
+    <div class="card">
+      <h2 id="ld-title">Scene complete!</h2>
+      <div class="big" id="ld-stars">★★★</div>
+      <p class="score-line" id="ld-score">Level score: 0</p>
+      <p>Combo streaks and leftover time add bonus points.</p>
+      <button class="btn" id="btn-next" type="button">Next level →</button>
+      <button class="btn secondary" id="btn-ld-replay" type="button">↻ Replay scene</button>
+      <button class="btn secondary" id="btn-ld-levels" type="button">Level select</button>
+    </div>
+  </div>
+
+  <div class="overlay hidden" id="ov-timeout">
+    <div class="card">
+      <h2>⏰ Time's up!</h2>
+      <p>The differences slipped away this time. You kept your score from finished scenes — try this scene again.</p>
+      <button class="btn" id="btn-retry" type="button">↻ Try again</button>
+      <button class="btn secondary" id="btn-to-levels" type="button">Level select</button>
+    </div>
+  </div>
+
+  <div class="overlay hidden" id="ov-win">
+    <div class="card">
+      <h2>🏆 Case closed!</h2>
+      <p>You found every difference in all 6 scenes. Brilliant detective work!</p>
+      <p class="score-line" id="win-score">Total score: 0</p>
+      <div class="big" id="win-stars">★★★★★★</div>
+      <p id="win-best">Best total: 0</p>
+      <button class="btn" id="btn-again" type="button">↻ Play again</button>
+      <button class="btn secondary" id="btn-win-levels" type="button">Level select</button>
+    </div>
+  </div>
+</div>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
